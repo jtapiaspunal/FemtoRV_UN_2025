@@ -19,13 +19,10 @@ module femto (
    wire [31:0] mem_address;
    reg  [31:0] mem_rdata;
    wire mem_rstrb;
-   wire [31:0] mem_wdata;
+   wire  [31:0] mem_wdata;
    wire [3:0]  mem_wmask;
 
    wire mapped_spi_flash_rbusy;
-
-
-
 
    FemtoRV32 CPU(
       .clk(clk),
@@ -41,29 +38,13 @@ module femto (
    wire [31:0] RAM_rdata;
    wire  wr = |mem_wmask;
    wire  rd = mem_rstrb; 
-
-/*
-   bram RAM(
-      .clk(clk),
-      .mem_addr(mem_address[6:2]),
-      .mem_rdata(dpram_dout),
-      .cs(cs[6]),
-      .rd(rd),
-      .wr(wr),
-      .mem_wdata(mem_wdata)
-      //.mem_wmask( { 4{ cs[6] } } & mem_wmask )
-   );
-
-*/
-
-
    wire spi_ram_rbusy;
    wire spi_ram_wbusy;
    MappedSPIRAM mapped_spi_ram(
       .clk(clk),
       .reset(resetn),
-      .word_address(mem_address[21:2]),
-      .wdata(mem_wdata),
+      .word_address(mem_address[15:0]),
+      .wdata(mem_wdata[31:0]),
       .rd(cs[6] & rd),
       .wr(cs[6] & wr),
       .rbusy(spi_ram_rbusy),
@@ -74,13 +55,18 @@ module femto (
       .MOSI(spi_mosi_ram),
       .rdata(dpram_dout)
    );
-//   wire [31:0] spi_ram_dout;
 
+`ifdef BENCH
+  FRAM_SPI flashram0(
+   .CSB(spi_cs_n_ram),     // Chip Select (activo en bajo)
+   .SCK(spi_clk_ram),    // SPI Clock
+   .SI(spi_mosi_ram),     // Serial Input (MOSI)
+   .SO(spi_miso_ram),     // Serial Output (MISO)
+   .VDD(reset_n),
+   .WPB(1'b1)
+  );
+`endif
 
-
-   //wire [31:0] mapped_spi_flash_rdata;
-
-   
    MappedSPIFlash mapped_spi_flash(
       .clk(clk),
       .reset(resetn),
@@ -92,19 +78,10 @@ module femto (
       .CS_N(spi_cs_n),
       .MISO(spi_miso),
       .MOSI(spi_mosi)
-      
    );
 
-
-
-
    wire [31:0] uart_dout;
-//   wire [31:0] gpio_dout;
-//  wire [31:0] mult_dout;
-//   wire [31:0] div_dout;
-//   wire [31:0] bin2bcd_dout;
    wire [31:0] dpram_dout;
-
 
   peripheral_uart #(
      .clk_freq(27000000),    // 27000000 for gowin
@@ -122,31 +99,6 @@ module femto (
      .ledout(LEDS)
    ); 
 
-/*
-	peripheral_mult mult1 (
-		.clk(clk), 
-		.reset(!resetn), 
-		.d_in(mem_wdata[15:0]), 
-		.cs(cs[3]), 
-		.addr(mem_address[4:0]), 
-		.rd(rd), 
-		.wr(wr), 
-		.d_out(mult_dout) 
-	);
-
-
-   peripheral_dpram dpram_p0( 
-      .clk(clk),
-      .reset(!resetn),
-      .d_in(mem_wdata[15:0]),
-      .cs(cs[6]),
-      .addr(mem_address[15:0]),
-      .rd(rd),
-      .wr(wr),
-      .d_out(dpram_dout)
-  );
-*/
-
   // ============== Chip_Select (Addres decoder) ======================== 
   // se hace con los 8 bits mas significativos de mem_addr
   // Se asigna el rango de la memoria de programa 0x00000000 - 0x003FFFFF
@@ -157,10 +109,10 @@ module femto (
       case (mem_address[31:16])	// direcciones - chip_select
         16'h0000: cs= 7'b0000001; 	//RAM
         16'h0040: cs= 7'b0100000; 	//uart
-        16'h0041: cs= 7'b0010000;	//gpio
-        16'h0042: cs= 7'b0001000;	//mult
-        16'h0043: cs= 7'b0000100;	//div
-        16'h0044: cs= 7'b0000010;	//bin_to_bcd
+//        16'h0041: cs= 7'b0010000;	//gpio
+//        16'h0042: cs= 7'b0001000;	//mult
+//        16'h0043: cs= 7'b0000100;	//div
+//        16'h0044: cs= 7'b0000010;	//bin_to_bcd
         16'h0001: cs= 7'b1000000;   //dpRAM
         default: cs= 7'b0000001;
       endcase
@@ -189,6 +141,5 @@ module femto (
       end
    end
 `endif
-
 
 endmodule
